@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trip Target Solver — BBC</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 16px; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f1117; color: #e1e4e8; padding: 1rem; min-height: 100vh;
+  }
+  .container { max-width: 640px; margin: 0 auto; }
+
+  h1 {
+    font-size: 1.35rem; font-weight: 700; margin-bottom: 0.25rem;
+    color: #f0f2f5;
+  }
+  .subtitle { color: #8b949e; font-size: 0.85rem; margin-bottom: 1.5rem; }
+
+  .card {
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 1rem; margin-bottom: 1rem;
+  }
+  .card-title {
+    font-size: 0.8rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.04em; color: #8b949e; margin-bottom: 0.75rem;
+  }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; }
+
+  label { display: block; font-size: 0.75rem; color: #8b949e; margin-bottom: 2px; }
+  input {
+    width: 100%; padding: 0.45rem 0.5rem; font-size: 0.9rem;
+    background: #0d1117; border: 1px solid #30363d; border-radius: 5px;
+    color: #e1e4e8; font-family: inherit; font-variant-numeric: tabular-nums;
+  }
+  input:focus { outline: none; border-color: #58a6ff; box-shadow: 0 0 0 2px #1f6feb40; }
+  .field { margin-bottom: 0.4rem; }
+  .field .suffix { font-size: 0.7rem; color: #8b949e; margin-top: 1px; }
+
+  .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  .result-card {
+    background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+    padding: 0.75rem; text-align: center;
+  }
+  .result-card.real { border-color: #238636; }
+  .result-card.pres { border-color: #d29922; }
+  .result-label { font-size: 0.7rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.03em; }
+  .result-value { font-size: 1.2rem; font-weight: 700; margin-top: 2px; }
+  .result-card.real .result-value { color: #3fb950; }
+  .result-card.pres .result-value { color: #d29922; }
+  .result-sub { font-size: 0.72rem; color: #8b949e; margin-top: 2px; }
+
+  .verdict {
+    text-align: center; padding: 0.6rem; border-radius: 6px;
+    font-size: 0.85rem; font-weight: 600; margin-top: 0.75rem;
+  }
+  .verdict.ok { background: #23863620; border: 1px solid #238636; color: #3fb950; }
+  .verdict.gap { background: #d2992220; border: 1px solid #d29922; color: #d29922; }
+  .verdict.bad { background: #da363320; border: 1px solid #da3633; color: #f85149; }
+
+  .forward-table { width: 100%; font-size: 0.82rem; border-collapse: collapse; }
+  .forward-table td { padding: 0.3rem 0; border-bottom: 1px solid #21262d; }
+  .forward-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  .forward-table .total td { font-weight: 700; border-bottom: 2px solid #30363d; }
+  .forward-table .label { color: #8b949e; }
+
+  .slider-row { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.5rem; }
+  .slider-row input[type=range] { flex: 1; }
+  .slider-value { font-weight: 700; color: #d29922; min-width: 3ch; text-align: right; font-size: 1rem; }
+
+  input[type=range] {
+    -webkit-appearance: none; appearance: none; height: 6px;
+    background: #30363d; border-radius: 3px; outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 16px; height: 16px;
+    background: #d29922; border-radius: 50%; cursor: pointer;
+  }
+
+  .badge {
+    display: inline-block; font-size: 0.65rem; font-weight: 600;
+    padding: 2px 6px; border-radius: 4px; letter-spacing: 0.03em;
+  }
+  .badge.real { background: #23863630; color: #3fb950; }
+  .badge.pres { background: #d2992230; color: #d29922; }
+
+  .solve-label { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.5rem; }
+  .vol-gap { font-size: 0.8rem; color: #f85149; margin-top: 0.3rem; }
+
+  @media (max-width: 480px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .grid-3 { grid-template-columns: 1fr 1fr; }
+    .result-grid { grid-template-columns: 1fr; }
+    .container { max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<h1>Trip Target Solver</h1>
+<p class="subtitle">Works backward from a net margin target. REAL vs PRESENTED.</p>
+
+<!-- ROUTE & FUEL -->
+<div class="card">
+  <div class="card-title">Route &amp; Fuel</div>
+  <div class="grid-3">
+    <div class="field">
+      <label>Distance (km, round)</label>
+      <input type="number" id="distance" value="98.88" step="0.01">
+    </div>
+    <div class="field">
+      <label>Fuel Economy (km/L)</label>
+      <input type="number" id="economy" value="1.92" step="0.01">
+    </div>
+    <div class="field">
+      <label>Fuel Price (₱/L)</label>
+      <input type="number" id="fuelPrice" value="70" step="1">
+    </div>
+  </div>
+  <div class="field">
+    <div class="suffix">Fuel: <span id="fuelCalc">51.5 L • ₱3,605</span></div>
+  </div>
+</div>
+
+<!-- FIXED COSTS -->
+<div class="card">
+  <div class="card-title">Fixed Trip Costs</div>
+  <div class="grid-2">
+    <div class="field">
+      <label>Driver's Pay (₱)</label>
+      <input type="number" id="driver" value="700" step="50">
+    </div>
+    <div class="field">
+      <label>Pahinante Fee (₱)</label>
+      <input type="number" id="pahinante" value="300" step="50">
+    </div>
+    <div class="field">
+      <label>Toll — NLEX (₱)</label>
+      <input type="number" id="tollNlex" value="408" step="10">
+    </div>
+    <div class="field">
+      <label>Toll — DPWH (₱)</label>
+      <input type="number" id="tollDpwh" value="500" step="10">
+    </div>
+  </div>
+  <div class="field">
+    <label>Other / Misc (₱)</label>
+    <input type="number" id="misc" value="0" step="50">
+  </div>
+  <div class="field">
+    <div class="suffix">Disbursements: ₱<span id="disbCalc">1,908</span></div>
+  </div>
+</div>
+
+<!-- CARGO & PRICING -->
+<div class="card">
+  <div class="card-title">Cargo &amp; Pricing</div>
+  <div class="grid-2">
+    <div class="field">
+      <label>Unit Cost (₱/CBM)</label>
+      <input type="number" id="unitCost" value="705" step="5">
+    </div>
+    <div class="field">
+      <label>Selling Price (₱/CBM)</label>
+      <input type="number" id="sellPrice" value="1050" step="10">
+    </div>
+    <div class="field">
+      <label>Current Volume (CBM)</label>
+      <input type="number" id="volume" value="23.89" step="0.1">
+    </div>
+    <div class="field">
+      <label>Commission (₱/CBM)</label>
+      <input type="number" id="commission" value="0" step="5">
+      <div class="suffix">₱<span id="commCalc">0</span> total</div>
+    </div>
+  </div>
+</div>
+
+<!-- FORWARD CHECK -->
+<div class="card">
+  <div class="card-title">Forward Check — Current P&amp;L</div>
+  <table class="forward-table">
+    <tr><td class="label">Gross Revenue</td><td>₱<span id="fwdRevenue">—</span></td></tr>
+    <tr><td class="label">Gross Margin (Trip)</td><td>₱<span id="fwdMargin">—</span></td></tr>
+    <tr><td class="label">Total Costs</td><td>₱<span id="fwdCosts">—</span></td></tr>
+    <tr class="total"><td>Net Profit</td><td>₱<span id="fwdProfit">—</span></td></tr>
+    <tr><td class="label">Net Margin</td><td><span id="fwdMarginPct">—</span></td></tr>
+  </table>
+</div>
+
+<!-- SOLVER -->
+<div class="card">
+  <div class="card-title">Solver — Backward from Target</div>
+
+  <div class="solve-label">
+    <span class="badge real">REAL</span>
+    <span>Target: <strong>15% net margin</strong></span>
+  </div>
+  <div class="result-grid">
+    <div class="result-card real">
+      <div class="result-label">Volume Needed</div>
+      <div class="result-value" id="realVol">—</div>
+      <div class="result-sub">CBM</div>
+    </div>
+    <div class="result-card real">
+      <div class="result-label">Gross Revenue</div>
+      <div class="result-value" id="realRev">—</div>
+      <div class="result-sub">₱</div>
+    </div>
+    <div class="result-card real">
+      <div class="result-label">Net Profit</div>
+      <div class="result-value" id="realProfit">—</div>
+      <div class="result-sub">₱</div>
+    </div>
+    <div class="result-card real">
+      <div class="result-label">Selling Price</div>
+      <div class="result-value" id="realPrice">—</div>
+      <div class="result-sub">₱/CBM (same margin)</div>
+    </div>
+  </div>
+  <div id="realGap" class="vol-gap"></div>
+
+  <hr style="border: none; border-top: 1px solid #21262d; margin: 1rem 0;">
+
+  <div class="solve-label">
+    <span class="badge pres">PRESENTED</span>
+    <span>Target: <span id="presTargetLabel">22%</span> net margin</span>
+  </div>
+  <div class="slider-row">
+    <span style="font-size:0.8rem;color:#8b949e;">20%</span>
+    <input type="range" id="presSlider" min="20" max="25" value="22" step="0.5">
+    <span class="slider-value" id="presSliderVal">22%</span>
+  </div>
+  <div class="result-grid">
+    <div class="result-card pres">
+      <div class="result-label">Volume Needed</div>
+      <div class="result-value" id="presVol">—</div>
+      <div class="result-sub">CBM</div>
+    </div>
+    <div class="result-card pres">
+      <div class="result-label">Gross Revenue</div>
+      <div class="result-value" id="presRev">—</div>
+      <div class="result-sub">₱</div>
+    </div>
+    <div class="result-card pres">
+      <div class="result-label">Net Profit</div>
+      <div class="result-value" id="presProfit">—</div>
+      <div class="result-sub">₱</div>
+    </div>
+    <div class="result-card pres">
+      <div class="result-label">Selling Price</div>
+      <div class="result-value" id="presPrice">—</div>
+      <div class="result-sub">₱/CBM (same margin)</div>
+    </div>
+  </div>
+  <div id="presGap" class="vol-gap"></div>
+</div>
+
+<div class="card" style="text-align:center;color:#8b949e;font-size:0.75rem;">
+  All calculations in browser. No data sent anywhere.
+</div>
+
+</div><!-- /container -->
+
+<script>
+function fmt(n) { return n.toLocaleString('en-PH', {minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtInt(n) { return n.toLocaleString('en-PH', {minimumFractionDigits:0,maximumFractionDigits:0}); }
+
+function calc() {
+  const d = parseFloat(document.getElementById('distance').value) || 0;
+  const e = parseFloat(document.getElementById('economy').value) || 0;
+  const fp = parseFloat(document.getElementById('fuelPrice').value) || 0;
+  const dr = parseFloat(document.getElementById('driver').value) || 0;
+  const ph = parseFloat(document.getElementById('pahinante').value) || 0;
+  const tn = parseFloat(document.getElementById('tollNlex').value) || 0;
+  const td = parseFloat(document.getElementById('tollDpwh').value) || 0;
+  const mi = parseFloat(document.getElementById('misc').value) || 0;
+  const uc = parseFloat(document.getElementById('unitCost').value) || 0;
+  const sp = parseFloat(document.getElementById('sellPrice').value) || 0;
+  const vol = parseFloat(document.getElementById('volume').value) || 0;
+  const cr = parseFloat(document.getElementById('commission').value) || 0;
+
+  const fuelL = e > 0 ? d / e : 0;
+  const fuelP = fuelL * fp;
+  const disb = dr + ph + tn + td + mi;
+  const comm = cr * vol;
+
+  document.getElementById('fuelCalc').textContent = `${fuelL.toFixed(1)} L | ₱${fmt(fuelP)}`;
+  document.getElementById('disbCalc').textContent = fmt(disb);
+  document.getElementById('commCalc').textContent = fmt(comm);
+
+  // Forward check
+  const grossRev = vol * sp;
+  const grossMarg = vol * (sp - uc);
+  const totalCosts = fuelP + disb + comm;
+  const netP = grossMarg - totalCosts;
+  const netM = grossRev > 0 ? (netP / grossRev) * 100 : 0;
+
+  document.getElementById('fwdRevenue').textContent = fmt(grossRev);
+  document.getElementById('fwdMargin').textContent = fmt(grossMarg);
+  document.getElementById('fwdCosts').textContent = fmtInt(totalCosts);
+  document.getElementById('fwdProfit').textContent = fmt(netP);
+  document.getElementById('fwdMarginPct').textContent = netM.toFixed(2) + '%';
+
+  // REAL solver — target 15%
+  const realTargetM = 0.15;
+  const fixedCosts = fuelP + disb;  // commission uses volume so varies
+  // Solve for Volume at target M: V = (Fuel + Disb) / ((SP - UC) - M * SP)
+  const realDenom = (sp - uc) - realTargetM * sp - cr;
+  let realVol, realRev, realProfit, realPrice;
+  if (realDenom > 0) {
+    realVol = fixedCosts / realDenom;
+    realRev = realVol * sp;
+    realProfit = realVol * (sp - uc) - fuelP - disb - cr * realVol;
+    // Solve for Selling Price at same margin and current volume
+    // SP = [V*UC + Fuel + Disb] / [V * (1 - M)]
+    const spDenom = vol * (1 - realTargetM);
+    realPrice = spDenom > 0 ? (vol * uc + fuelP + disb) / spDenom : 0;
+  } else {
+    realVol = realRev = realProfit = realPrice = 0;
+  }
+
+  document.getElementById('realVol').textContent = realVol > 0 ? fmt(realVol) : '—';
+  document.getElementById('realRev').textContent = realRev > 0 ? '₱' + fmt(realRev) : '—';
+  document.getElementById('realProfit').textContent = realProfit > 0 ? '₱' + fmt(realProfit) : '—';
+  document.getElementById('realPrice').textContent = realPrice > 0 ? '₱' + fmt(realPrice) : '—';
+
+  const realGap = realVol - vol;
+  const realGapEl = document.getElementById('realGap');
+  if (realGap > 0) {
+    realGapEl.textContent = `⬆ Need +${realGap.toFixed(2)} more CBM than current (${vol.toFixed(2)})`;
+    realGapEl.style.color = '#d29922';
+  } else if (realGap < 0) {
+    realGapEl.textContent = `✓ Current volume exceeds 15% target by ${Math.abs(realGap).toFixed(2)} CBM`;
+    realGapEl.style.color = '#3fb950';
+  } else {
+    realGapEl.textContent = '';
+  }
+
+  // PRESENTED solver — slider target
+  const presPct = parseFloat(document.getElementById('presSlider').value);
+  const presTargetM = presPct / 100;
+
+  const presDenom = (sp - uc) - presTargetM * sp - cr;
+  let presVol, presRev, presProfit, presPrice;
+  if (presDenom > 0) {
+    presVol = fixedCosts / presDenom;
+    presRev = presVol * sp;
+    presProfit = presVol * (sp - uc) - fuelP - disb - cr * presVol;
+    const spDenom2 = vol * (1 - presTargetM);
+    presPrice = spDenom2 > 0 ? (vol * uc + fuelP + disb) / spDenom2 : 0;
+  } else {
+    presVol = presRev = presProfit = presPrice = 0;
+  }
+
+  document.getElementById('presVol').textContent = presVol > 0 ? fmt(presVol) : '—';
+  document.getElementById('presRev').textContent = presRev > 0 ? '₱' + fmt(presRev) : '—';
+  document.getElementById('presProfit').textContent = presProfit > 0 ? '₱' + fmt(presProfit) : '—';
+  document.getElementById('presPrice').textContent = presPrice > 0 ? '₱' + fmt(presPrice) : '—';
+
+  const presGap = presVol - vol;
+  const presGapEl = document.getElementById('presGap');
+  if (presGap > 0) {
+    presGapEl.textContent = `⬆ Need +${presGap.toFixed(2)} more CBM (presented target)`;
+    presGapEl.style.color = '#d29922';
+  } else if (presGap < 0) {
+    presGapEl.textContent = `✓ Current volume exceeds ${presPct}% target`;
+    presGapEl.style.color = '#3fb950';
+  } else {
+    presGapEl.textContent = '';
+  }
+}
+
+// Slider
+document.getElementById('presSlider').addEventListener('input', function() {
+  document.getElementById('presSliderVal').textContent = this.value + '%';
+  document.getElementById('presTargetLabel').textContent = this.value + '%';
+  calc();
+});
+
+// All inputs trigger recalc
+document.querySelectorAll('input').forEach(el => {
+  el.addEventListener('input', calc);
+});
+
+calc();
+</script>
+</body>
+</html>
